@@ -1,0 +1,16 @@
+[project]
+name = "anythingllm-mcp-server"
+version = "0.1.0"
+description = "MCP server that connects to a local AnythingLLM instance"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=2.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+]
+
+[tool.setuptools]
+py-modules = ["server", "config", "anythingllm_client"]
+
+[project.scripts]
+anythingllm-mcp = "server:main"

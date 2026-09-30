@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnythingLLM 文档上传</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px}
+input[type=file]{margin-bottom:12px}
+button{padding:8px 18px}
+#out{background:#f6f8fa;border:1px solid #ddd;border-radius:6px;padding:12px;margin-top:16px;white-space:pre-wrap;word-break:break-all;font-size:14px;min-height:40px}
+</style>
+</head>
+<body>
+<h3>上传文档到 AnythingLLM 并向量化</h3>
+<input type="file" id="file">
+<button id="btn">上传并嵌入</button>
+<div id="out">等待操作…</div>
+<script>
+const API='http://localhost:3001/api/v1';
+const KEY=prompt('请输入 AnythingLLM API Key（不会保存在代码中）')||'';
+const btn=document.getElementById('btn');
+const out=document.getElementById('out');
+const log=(s)=>out.textContent=s;
+
+btn.onclick=async()=>{
+  const f=document.getElementById('file').files[0];
+  if(!f){log('请先选择文件');return;}
+  btn.disabled=true;
+  try{
+    const ws=await fetch(`${API}/workspaces`,{headers:{Authorization:`Bearer ${KEY}`}}).then(r=>r.json());
+    const slug=ws.workspaces?.[0]?.slug;
+    if(!slug)throw new Error('没有可用工作区');
+    log(`工作区: ${slug}, 上传 ${f.name}…`);
+    const fd=new FormData();
+    fd.append('file',f);
+    fd.append('addToWorkspaces',slug);
+    const res=await fetch(`${API}/document/upload`,{method:'POST',headers:{Authorization:`Bearer ${KEY}`},body:fd}).then(r=>r.json());
+    if(!res.success)throw new Error(res.error||'上传失败');
+    log('上传成功:\n'+JSON.stringify(res.documents?.map(d=>({title:d.title,words:d.wordCount,tokens:d.token_count_estimate})),null,2));
+  }catch(e){
+    log('错误: '+e.message);
+  }
+  btn.disabled=false;
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+[project]
+name = "pet-hospital-mcp-server"
+version = "0.1.0"
+description = "宠物医院 MCP Server（第一版 + 写操作 · MCP 2026-07-28 · Python SDK v2）"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=2.0.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+pet-mcp = "server:main"
+
+[tool.uv]
+package = false
