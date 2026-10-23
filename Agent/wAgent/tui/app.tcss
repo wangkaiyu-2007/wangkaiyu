@@ -1,0 +1,118 @@
+Screen {
+    layout: vertical;
+    background: $background;
+}
+
+Header {
+    background: $panel;
+    color: $text-muted;
+}
+
+#body {
+    height: 1fr;
+}
+
+#log {
+    width: 1fr;
+    height: 1fr;
+    margin: 1 1 0 1;
+    padding: 0 2;
+    border: round $accent 45%;
+    background: $surface;
+}
+
+#sidebar {
+    width: 42;
+    height: 1fr;
+    margin: 1 1 0 0;
+    padding: 0;
+    scrollbar-gutter: stable;
+}
+
+#sidebar-title {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+    text-style: bold;
+}
+
+.panel {
+    height: auto;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    border: round $accent 25%;
+    background: $surface;
+}
+
+.panel-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+#round-progress {
+    width: 100%;
+    height: 1;
+    margin: 0 0 1 0;
+}
+
+#task-info,
+#usage-info,
+#runtime-info,
+#tools-info {
+    height: auto;
+}
+
+#sidebar-help {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#command-palette {
+    height: auto;
+    max-height: 9;
+    margin: 0 1;
+    padding: 0 1;
+    border: round $accent 60%;
+    background: $surface;
+}
+
+#command-palette-title {
+    height: 1;
+    color: $text-muted;
+}
+
+#command-options {
+    height: auto;
+    max-height: 6;
+    padding: 0 1;
+    border: none;
+    background: transparent;
+}
+
+#command-options > .option-list--option-highlighted {
+    background: $surface-lighten-1;
+    color: $accent;
+}
+
+#status {
+    height: 1;
+    padding: 0 2;
+    color: $text-muted;
+}
+
+#prompt {
+    margin: 0 1 1 1;
+    background: $surface;
+    border: tall $accent 35%;
+}
+
+#prompt:focus {
+    border: tall $accent;
+}
+
+Footer {
+    background: $panel;
+    color: $text-muted;
+}

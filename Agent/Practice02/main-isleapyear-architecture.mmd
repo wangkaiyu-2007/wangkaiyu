@@ -1,0 +1,106 @@
+%% main-isleapyear.py 代码架构图
+%% 流式多轮对话 + Function Calling（getDate / isLwapYear）
+flowchart TD
+    %% ===== 启动与配置层 =====
+    subgraph BOOT["启动与配置层"]
+        A1["config.ini<br/>[openai] base_url / api_key / model"]
+        A2["配置加载与校验<br/>configparser.read(CONFIG_PATH)"]
+        A3{"校验通过？"}
+        A4["打印错误信息<br/>sys.exit(1)"]
+        A5["拼接 chat_url<br/>{base_url}/chat/completions"]
+        A6["初始化历史<br/>history = [system prompt]"]
+    end
+
+    %% ===== 常量与元数据层 =====
+    subgraph META["常量与工具定义"]
+        M1["SYSTEM_PROMPT<br/>系统提示词：上下文记忆 + 调用约束"]
+        M2["TOOLS<br/>OpenAI 风格工具描述数组"]
+        M21["getDate<br/>无参数"]
+        M22["isLwapYear<br/>参数 year: integer"]
+    end
+
+    %% ===== 交互层 =====
+    subgraph LOOP["主交互循环 while True"]
+        L1["input 读取用户输入"]
+        L2{"空输入？"}
+        L3{"命令判断"}
+        L4["/exit · /quit · exit · quit<br/>退出程序"]
+        L5["/clear · clear<br/>重置 history"]
+        L6["history.append(user)"]
+    end
+
+    %% ===== 智能体核心 =====
+    subgraph AGENT["Agent 工具调用循环（最多 5 轮）"]
+        G1["stream_chat(history)"]
+        G2{"存在 tool_calls？"}
+        G3["history.append(assistant + tool_calls)"]
+        G4["execute_tool(name, arguments)"]
+        G5["history.append(tool 结果)"]
+        G6["history.append(assistant 文本)<br/>本轮结束"]
+    end
+
+    %% ===== 网络层 =====
+    subgraph NET["流式请求层 stream_chat"]
+        N1["requests.post<br/>headers: Authorization Bearer<br/>stream=True, timeout=60"]
+        N2["raise_for_status()"]
+        N3["iter_lines() 逐行读取"]
+        N4{"行以 data: 开头？"}
+        N5{"data == [DONE] ?"}
+        N6["json.loads → choices[0].delta"]
+        N7["content 片段<br/>print 并累积到 parts"]
+        N8["tool_calls 增量<br/>按 index 拼接 id / name / arguments"]
+        N9["返回 (text, tool_calls)"]
+    end
+
+    %% ===== 工具执行层 =====
+    subgraph TOOLEXEC["工具执行层 execute_tool"]
+        E1{"工具名分发"}
+        E2["get_date()<br/>subprocess: cmd /c date /t、time /t"]
+        E3["decode_cmd_output()<br/>先 gbk 后 utf-8 解码"]
+        E4["is_leap_year(year)<br/>(%4==0 and %100!=0) or %400==0"]
+        E5["参数校验<br/>JSON 解析 / 缺 year / 非整数"]
+        E6["返回自然语言结果文本"]
+        E7["未知工具提示"]
+    end
+
+    %% ===== 异常处理 =====
+    subgraph ERR["异常处理"]
+        R1["requests.RequestException<br/>history.pop() 并提示，继续下一轮"]
+        R2["KeyboardInterrupt / EOFError<br/>平滑退出"]
+    end
+
+    %% ===== 流程连线 =====
+    A1 --> A2 --> A3
+    A3 -- 否 --> A4
+    A3 -- 是 --> A5 --> A6 --> L1
+    M1 -.-> A6
+    M2 -.-> M21
+    M2 -.-> M22
+    M1 -.-> G1
+    M2 -.-> G1
+
+    L1 --> L2
+    L2 -- 是 --> L1
+    L2 -- 否 --> L3
+    L3 -- 退出命令 --> L4
+    L3 -- 清空命令 --> L5 --> L1
+    L3 -- 普通提问 --> L6 --> G1
+
+    G1 --> N1 --> N2 --> N3 --> N4
+    N4 -- 否 --> N3
+    N4 -- 是 --> N5
+    N5 -- 是 --> N9
+    N5 -- 否 --> N6 --> N7 --> N8 --> N3
+
+    N9 --> G2
+    G2 -- 否 --> G6 --> L1
+    G2 -- 是 --> G3 --> G4 --> G5 --> G1
+
+    G4 --> E1
+    E1 -- getDate --> E2 --> E3 --> E6
+    E1 -- isLwapYear --> E5 --> E4 --> E6
+    E1 -- 其他 --> E7
+    E6 -. 结果文本 .-> G5
+
+    N1 -. 网络异常 .-> R1 --> L1
+    L1 -. 中断信号 .-> R2
