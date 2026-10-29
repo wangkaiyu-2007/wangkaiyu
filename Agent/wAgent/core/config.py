@@ -23,10 +23,19 @@ class LLMConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SearchConfig:
+    api_key: str
+    base_url: str = "https://qianfan.baidubce.com/v2/ai_search/web_search"
+    top_k: int = 8
+    timeout: float = 20.0
+
+
+@dataclass(frozen=True, slots=True)
 class AgentConfig:
     llm: LLMConfig
     max_tool_rounds: int = 10
     source: Path | None = None
+    search: SearchConfig | None = None
 
 
 def _candidate_paths() -> list[Path]:
@@ -35,6 +44,7 @@ def _candidate_paths() -> list[Path]:
 
     candidates = [
         project_root / "config.ini",
+        project_root / "congfig.ini",
         agent_root / "Practice02" / "config.ini",
         Path.cwd() / "config.ini",
     ]
@@ -69,6 +79,53 @@ def _positive_float(parser: configparser.ConfigParser, key: str, default: float)
     if value <= 0:
         raise ConfigError(f"配置项 agent.{key} 必须大于 0，当前值为：{value}")
     return value
+
+
+def _search_option(parser: configparser.ConfigParser) -> str:
+    for key in (
+        "baidu_qianfan_api_key",
+        "baidu qianfan api key",
+        "baidu_api_key",
+        "api_key",
+    ):
+        if parser.has_option("search", key):
+            return parser.get("search", key).strip()
+    return ""
+
+
+def _load_search_config(parser: configparser.ConfigParser) -> SearchConfig | None:
+    if not parser.has_section("search"):
+        return None
+
+    api_key = _search_option(parser)
+    if not api_key or api_key == "your-baidu-qianfan-api-key":
+        return SearchConfig(api_key="")
+
+    base_url = parser.get(
+        "search",
+        "base_url",
+        fallback="https://qianfan.baidubce.com/v2/ai_search/web_search",
+    ).strip()
+
+    try:
+        top_k = int(parser.get("search", "top_k", fallback="8"))
+    except ValueError:
+        top_k = 8
+    top_k = max(1, min(50, top_k))
+
+    try:
+        timeout = float(parser.get("search", "timeout", fallback="20"))
+    except ValueError:
+        timeout = 20.0
+    if timeout <= 0:
+        timeout = 20.0
+
+    return SearchConfig(
+        api_key=api_key,
+        base_url=base_url or "https://qianfan.baidubce.com/v2/ai_search/web_search",
+        top_k=top_k,
+        timeout=timeout,
+    )
 
 
 def load_config(path: str | Path | None = None) -> AgentConfig:
@@ -121,4 +178,5 @@ def load_config(path: str | Path | None = None) -> AgentConfig:
         ),
         max_tool_rounds=_positive_int(parser, "max_tool_rounds", 10),
         source=selected,
+        search=_load_search_config(parser),
     )

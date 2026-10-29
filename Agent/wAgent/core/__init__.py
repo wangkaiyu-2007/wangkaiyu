@@ -11,7 +11,14 @@ from .events import (
     UsageUpdated,
 )
 from .llm import ChatResult, LLMError, OpenAIChatClient
-from .tools import FileSystemTools, Tool, ToolRegistry, ToolResult, create_default_registry
+from .tools import (
+    CliTools,
+    FileSystemTools,
+    Tool,
+    ToolRegistry,
+    ToolResult,
+    create_default_registry,
+)
 
 __all__ = [
     "Agent",
@@ -30,6 +37,7 @@ __all__ = [
     "ChatResult",
     "LLMError",
     "OpenAIChatClient",
+    "CliTools",
     "FileSystemTools",
     "Tool",
     "ToolRegistry",

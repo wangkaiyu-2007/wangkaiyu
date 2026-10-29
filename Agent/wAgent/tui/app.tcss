@@ -5,7 +5,7 @@ Screen {
 
 Header {
     background: $panel;
-    color: $text-muted;
+    color: $text;
 }
 
 #body {
@@ -17,8 +17,9 @@ Header {
     height: 1fr;
     margin: 1 1 0 1;
     padding: 0 2;
-    border: round $accent 45%;
+    border: round $accent 35%;
     background: $surface;
+    color: $text;
 }
 
 #sidebar {
@@ -32,7 +33,7 @@ Header {
 #sidebar-title {
     height: 1;
     padding: 0 1;
-    color: $text-muted;
+    color: $text;
     text-style: bold;
 }
 
@@ -61,12 +62,13 @@ Header {
 #runtime-info,
 #tools-info {
     height: auto;
+    color: $text;
 }
 
 #sidebar-help {
     height: 1;
     padding: 0 1;
-    color: $text-muted;
+    color: $text;
 }
 
 #command-palette {
@@ -80,7 +82,7 @@ Header {
 
 #command-palette-title {
     height: 1;
-    color: $text-muted;
+    color: $text;
 }
 
 #command-options {
@@ -89,6 +91,7 @@ Header {
     padding: 0 1;
     border: none;
     background: transparent;
+    color: $text;
 }
 
 #command-options > .option-list--option-highlighted {
@@ -99,20 +102,33 @@ Header {
 #status {
     height: 1;
     padding: 0 2;
-    color: $text-muted;
+    color: $text;
 }
 
 #prompt {
+    height: auto;
+    min-height: 3;
+    max-height: 11;
     margin: 0 1 1 1;
+    padding: 0 1;
     background: $surface;
     border: tall $accent 35%;
+    scrollbar-size-vertical: 1;
 }
 
 #prompt:focus {
     border: tall $accent;
 }
 
+#prompt .text-area--placeholder {
+    color: $text 55%;
+}
+
+#prompt .text-area--cursor-line {
+    background: transparent;
+}
+
 Footer {
     background: $panel;
-    color: $text-muted;
+    color: $text;
 }

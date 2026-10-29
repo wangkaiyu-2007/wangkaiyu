@@ -1,5 +1,7 @@
 # 真实配置（含 API Key），不要提交
 config.ini
+congfig.ini
+confit.ini
 
 # Python
 __pycache__/

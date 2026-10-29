@@ -65,7 +65,10 @@ Agent/wAgent/
 │   ├── llm.py               # OpenAI 兼容流式客户端
 │   └── tools/
 │       ├── base.py          # Tool、ToolResult 抽象
+│       ├── cli.py           # runCli：执行本地命令行程序
 │       ├── filesystem.py    # 文件系统工具实现
+│       ├── web.py           # fetchWeb：curl + trafilatura 网页正文提取
+│       ├── search.py        # searchWeb：百度千帆网络搜索
 │       ├── registry.py      # 工具注册与 JSON 参数分发
 │       └── __init__.py      # 默认工具集装配
 └── tui/
@@ -119,14 +122,27 @@ request_timeout = 60
 1. `--config` 指定路径
 2. 环境变量 `WAGENT_CONFIG`
 3. `wAgent/config.ini`
-4. `Agent/Practice02/config.ini`（兼容旧配置）
-5. 当前工作目录下的 `config.ini`
+4. `wAgent/congfig.ini`（兼容指定文件名）
+5. `Agent/Practice02/config.ini`（兼容旧配置）
+6. 当前工作目录下的 `config.ini`
+
+搜索配置示例：
+
+```ini
+[search]
+baidu_qianfan_api_key = your-baidu-qianfan-api-key
+top_k = 8
+timeout = 20
+```
+
+`baidu_qianfan_api_key` 也兼容 `baidu qianfan api key`、`baidu_api_key` 和 `api_key` 等写法。
 
 ## TUI 操作
 
 | 操作 | 说明 |
 |------|------|
 | `Enter` | 发送问题 |
+| `Shift+Enter` / `Ctrl+J` | 在输入框中手动换行（也可直接输入长文本，输入框会自动换行并自动增高） |
 | 输入 `/` | 在输入框上方弹出命令列表 |
 | `Up` / `Down` | 在命令列表中选择 |
 | `Tab` | 补全当前选中的命令 |
@@ -146,12 +162,15 @@ request_timeout = 60
 - 工具执行结果（失败时标红）
 - 配置错误、接口错误等异常信息
 
+用户消息与助手回复统一使用 6 列标签缩进，多行内容和自动换行后的续行会对齐到正文列。助手回复会识别常见 Markdown 结构：标题、列表、引用、分隔线、表格、行内代码与代码块，并以更清晰的样式渲染。
+
 ### 视觉风格
 
-- 主区域、侧边栏和输入框使用中性深色背景，避免大面积高亮底色。
-- 边框和面板标题使用强调色，便于划分区域。
-- 用户、助手、工具和错误内容使用不同的强调色标签区分，正文保持中性色。
-- 命令列表使用低对比度选中背景，仅用强调色标记当前项。
+- 输出风格向 opencode 对齐：正文、用户消息、助手消息和工具结果默认使用白色字体。
+- 仅标题、加粗重点、行内代码、链接、列表标记和工具名使用强调色；错误信息使用红色。
+- 用户与助手标签使用白色粗体，不再用多种颜色区分角色。
+- 代码块正文保持白色，避免整块高亮影响阅读。
+- 边框和面板标题使用强调色划分区域；命令列表仅用强调色标记当前项。
 ### 侧边栏
 
 右侧边栏固定展示运行状态：
@@ -188,6 +207,9 @@ token 用量来自接口返回的 `usage` 字段。如果服务端不返回该�
 | `deleteDirectory` | 递归删除非空目录 |
 | `deleteFile` | 删除文件 |
 | `renamePath` | 重命名或移动文件/目录 |
+| `fetchWeb` | 通过本地 curl 获取网页 HTML，再用 trafilatura 提取正文并转为 Markdown |
+| `searchWeb` | 调用百度千帆网络搜索 API，返回搜索摘要、来源标题和 URL |
+| `runCli` | 执行本地已安装的命令行程序，返回标准输出、标准错误和退出码 |
 
 文件工具的限制与保护：
 
@@ -195,6 +217,33 @@ token 用量来自接口返回的 `usage` 字段。如果服务端不返回该�
 - 读取文件上限为 1 MB。
 - 删除和重命名会拒绝磁盘根目录。
 - 工具异常统一转换为 `ToolResult(ok=False)`，不会中断对话循环。
+
+网页工具的限制与保护：
+
+- 仅允许 `http://` 和 `https://` URL，并限制重定向协议，避免访问本地文件协议。
+- 通过 `subprocess` 以参数列表调用 curl，不使用 `shell=True`；默认超时 20 秒。
+- 限制下载大小和 Markdown 正文长度，避免异常页面消耗过多上下文。
+- 使用 trafilatura 去除导航、广告、页脚等无关内容，保留标题、段落、列表、表格和链接。
+- 网页访问失败、超时、HTTP 错误、HTML 解析失败或正文无法提取时，会返回中文错误信息。
+- 需要本地已安装 curl；Windows 10/11 通常自带 `curl.exe`，也可用 `WAGENT_CURL` 指定路径。
+
+网络搜索工具 `searchWeb`：
+
+- 使用百度千帆「百度搜索」API：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`。
+- 通过配置文件 `[search]` 小节的 `baidu_qianfan_api_key` 读取 API Key，不在代码中硬编码。
+- 返回搜索结果摘要、来源标题、URL、站点和发布时间，自动去重并限制摘要长度。
+- 缺少 API Key、网络失败、请求超时、HTTP 错误、API 业务错误或返回 JSON 异常时，会以中文错误信息返回给模型。
+- 单次查询会按接口限制截取到 72 个字符宽度以内。
+
+本地命令行工具 `runCli`：
+
+- 接收程序名称 `command` 和参数列表 `args`，例如 `command="git"`、`args=["--version"]`。
+- 通过 `shutil.which` 在 `PATH` 中查找程序，再以参数列表形式调用 `subprocess.run`，固定使用 `shell=False`，避免 Shell 字符串拼接与转义问题。
+- 返回标准输出、标准错误和退出码；非零退出码不会被当成工具异常，交由模型判断执行结果。
+- 默认超时 30 秒；超时后会终止进程并返回已捕获的部分输出，同时标注超时状态。
+- 标准输出和标准错误分别截断到 8000 个字符，并明确标注截断位置和省略字符数。
+- 自动识别 UTF-8、系统默认编码和 GBK，兼容 Windows 命令行程序的中文输出。
+- 仅用于受控教学实验环境：当前按运行 wAgent 的用户权限执行，未实现命令白名单、黑名单和审批机制，请勿在不可信环境中使用。
 
 ## 核心事件流
 
