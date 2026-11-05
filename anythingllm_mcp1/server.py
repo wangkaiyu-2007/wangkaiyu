@@ -1,3 +1,5 @@
+import sys
+
 from mcp.server import MCPServer
 from config import validate, ANYTHINGLLM_WORKSPACE_SLUG
 from anythingllm_client import get_client
@@ -14,7 +16,10 @@ async def ask_workspace(question: str) -> str:
 
 def main() -> None:
     validate()
-    print(f"AnythingLLM MCP Server starting (workspace: {ANYTHINGLLM_WORKSPACE_SLUG})")
+    print(
+        f"AnythingLLM MCP Server starting (workspace: {ANYTHINGLLM_WORKSPACE_SLUG})",
+        file=sys.stderr,
+    )
     mcp.run()
 
 

@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "Bazi-MCP": {
+      "type": "streamable_http",
+      "url": "https://mcp.api-inference.modelscope.net/ac7cf4c8419648/mcp"
+    },
+    "PetHospital-MCP": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "D:\\zuoye\\pethospitalMCP\\pet-hospital-mcp-teaching-main\\pet-hospital-mcp-server\\server.py"
+      ],
+      "cwd": "D:\\zuoye\\pethospitalMCP\\pet-hospital-mcp-teaching-main\\pet-hospital-mcp-server"
+    },
+    "AnythingLLM-MCP": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "D:\\zuoye\\anythingllm_mcp1\\server.py"
+      ],
+      "cwd": "D:\\zuoye\\anythingllm_mcp1",
+      "timeout": 90
+    }
+  }
+}

@@ -52,6 +52,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     agent = Agent(config)
+    for warning in agent.mcp.warnings:
+        print(f"MCP：{warning}", file=sys.stderr)
+    if agent.mcp.connected_servers:
+        tool_count = len(agent.mcp.tools)
+        servers = "、".join(agent.mcp.connected_servers)
+        print(f"MCP：已连接 {servers}，注册 {tool_count} 个工具", file=sys.stderr)
+
     app = WAgentApp(agent)
     try:
         app.run()

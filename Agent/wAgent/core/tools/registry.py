@@ -24,6 +24,9 @@ class ToolRegistry:
     def names(self) -> tuple[str, ...]:
         return tuple(self._tools)
 
+    def tools(self) -> tuple[Tool, ...]:
+        return tuple(self._tools.values())
+
     def schemas(self) -> list[dict[str, Any]]:
         return [tool.schema() for tool in self._tools.values()]
 

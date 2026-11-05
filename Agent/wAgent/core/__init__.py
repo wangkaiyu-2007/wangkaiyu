@@ -11,6 +11,12 @@ from .events import (
     UsageUpdated,
 )
 from .llm import ChatResult, LLMError, OpenAIChatClient
+from .mcp import (
+    MCPClientManager,
+    MCPServerConfig,
+    MCPTool,
+    load_mcp_config,
+)
 from .tools import (
     CliTools,
     FileSystemTools,
@@ -37,6 +43,10 @@ __all__ = [
     "ChatResult",
     "LLMError",
     "OpenAIChatClient",
+    "MCPClientManager",
+    "MCPServerConfig",
+    "MCPTool",
+    "load_mcp_config",
     "CliTools",
     "FileSystemTools",
     "Tool",

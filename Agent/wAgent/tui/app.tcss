@@ -3,50 +3,208 @@ Screen {
     background: $background;
 }
 
-Header {
+#topbar {
+    height: 2;
+    padding: 0 2;
     background: $panel;
-    color: $text;
+    border-bottom: solid $accent 18%;
 }
 
-#body {
+#brand {
+    width: auto;
+    padding: 0 1 0 0;
+    content-align: left middle;
+}
+
+#topbar-meta {
+    width: 1fr;
+    content-align: right middle;
+    color: $text 55%;
+}
+
+#workspace {
     height: 1fr;
+}
+
+#chat-pane {
+    width: 1fr;
+    height: 1fr;
+}
+
+#welcome {
+    width: 1fr;
+    height: 1fr;
+    padding: 1 2;
+    align: center middle;
+}
+
+#welcome-inner {
+    width: 86%;
+    max-width: 86;
+    height: auto;
+}
+
+#welcome-logo {
+    width: 1fr;
+    height: auto;
+    content-align: center top;
+}
+
+#welcome-subtitle {
+    width: 1fr;
+    height: auto;
+    margin-top: 1;
+    content-align: center top;
+}
+
+#welcome-desc {
+    width: 1fr;
+    height: auto;
+    margin-top: 1;
+    content-align: center top;
+    color: $text 55%;
+}
+
+#welcome-card {
+    width: 1fr;
+    height: auto;
+    margin: 2 7 1 7;
+    padding: 1 2;
+    border: round $accent 30%;
+    background: $surface;
+    content-align: left middle;
+}
+
+#welcome-info {
+    width: 1fr;
+    height: auto;
+}
+
+#welcome-hint {
+    width: 1fr;
+    height: auto;
+    margin-top: 1;
+    content-align: center middle;
 }
 
 #log {
     width: 1fr;
     height: 1fr;
     margin: 1 1 0 1;
-    padding: 0 2;
-    border: round $accent 35%;
-    background: $surface;
+    padding: 0 1;
+    background: transparent;
+    color: $text;
+    scrollbar-size-vertical: 1;
+}
+
+#composer {
+    width: 1fr;
+    height: auto;
+    margin: 0 1 1 1;
+}
+
+#status {
+    height: 1;
+    padding: 0 1;
     color: $text;
 }
 
+#command-palette {
+    height: auto;
+    max-height: 9;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    border: round $accent 60%;
+    background: $surface;
+}
+
+#command-palette-title {
+    height: 1;
+    color: $text 55%;
+}
+
+#command-options {
+    height: auto;
+    max-height: 6;
+    padding: 0 1;
+    border: none;
+    background: transparent;
+    color: $text;
+}
+
+#command-options > .option-list--option-highlighted {
+    background: $boost;
+    color: $accent;
+}
+
+#prompt {
+    height: auto;
+    min-height: 3;
+    max-height: 11;
+    padding: 0 1;
+    background: $surface;
+    border: tall $accent 30%;
+    scrollbar-size-vertical: 1;
+}
+
+#prompt:focus {
+    border: tall $accent;
+}
+
+#prompt .text-area--placeholder {
+    color: $text 45%;
+}
+
+#prompt .text-area--cursor-line {
+    background: transparent;
+}
+
+#hints {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+    border-top: solid $accent 12%;
+}
+
+#hint-main {
+    width: 1fr;
+    color: $text 55%;
+}
+
+#hint-keys {
+    width: 1fr;
+    content-align: right middle;
+    color: $text 55%;
+}
+
 #sidebar {
-    width: 42;
+    width: 38;
     height: 1fr;
     margin: 1 1 0 0;
-    padding: 0;
+    padding: 0 1;
+    border-left: solid $accent 18%;
+    background: $panel;
     scrollbar-gutter: stable;
 }
 
 #sidebar-title {
     height: 1;
-    padding: 0 1;
-    color: $text;
+    margin: 0 0 1 0;
+    color: $accent;
     text-style: bold;
 }
 
 .panel {
     height: auto;
     margin: 0 0 1 0;
-    padding: 0 1;
-    border: round $accent 25%;
-    background: $surface;
+    padding: 0 0 1 0;
+    border-bottom: solid $accent 12%;
+    background: transparent;
 }
 
 .panel-title {
     height: 1;
+    margin: 0 0 1 0;
     color: $accent;
     text-style: bold;
 }
@@ -60,75 +218,19 @@ Header {
 #task-info,
 #usage-info,
 #runtime-info,
+#skills-info,
 #tools-info {
     height: auto;
     color: $text;
 }
 
+#skills-info,
+#tools-info {
+    color: $text;
+}
+
 #sidebar-help {
-    height: 1;
-    padding: 0 1;
-    color: $text;
-}
-
-#command-palette {
     height: auto;
-    max-height: 9;
-    margin: 0 1;
-    padding: 0 1;
-    border: round $accent 60%;
-    background: $surface;
-}
-
-#command-palette-title {
-    height: 1;
-    color: $text;
-}
-
-#command-options {
-    height: auto;
-    max-height: 6;
-    padding: 0 1;
-    border: none;
-    background: transparent;
-    color: $text;
-}
-
-#command-options > .option-list--option-highlighted {
-    background: $surface-lighten-1;
-    color: $accent;
-}
-
-#status {
-    height: 1;
-    padding: 0 2;
-    color: $text;
-}
-
-#prompt {
-    height: auto;
-    min-height: 3;
-    max-height: 11;
-    margin: 0 1 1 1;
-    padding: 0 1;
-    background: $surface;
-    border: tall $accent 35%;
-    scrollbar-size-vertical: 1;
-}
-
-#prompt:focus {
-    border: tall $accent;
-}
-
-#prompt .text-area--placeholder {
+    padding: 0;
     color: $text 55%;
-}
-
-#prompt .text-area--cursor-line {
-    background: transparent;
-}
-
-Footer {
-    background: $panel;
-    color: $text;
 }

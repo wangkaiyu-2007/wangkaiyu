@@ -15,7 +15,9 @@ from .events import (
     UsageUpdated,
 )
 from .llm import LLMError, OpenAIChatClient
-from .tools import ToolRegistry, create_default_registry
+from .mcp import MCPClientManager, load_mcp_config
+from .skills import SkillCatalog
+from .tools import SkillTools, ToolRegistry, create_default_registry
 
 
 SYSTEM_PROMPT = (
@@ -33,7 +35,8 @@ SYSTEM_PROMPT = (
     "11. 回复保持简洁，除非用户要求更多细节；\n"
     "12. 回复使用规范的 Markdown：标题用 ###，要点用 - 列表，代码或命令用 ``` 代码块；\n"
     "13. 先给结论，再给必要说明；不要输出大量空行、重复内容或无意义的客套话；\n"
-    "14. 使用 searchWeb 后，应基于搜索摘要归纳，并保留关键来源的标题或 URL，便于用户核对。"
+    "14. 使用 searchWeb 后，应基于搜索摘要归纳，并保留关键来源的标题或 URL，便于用户核对；\n"
+    "15. 描述以 [MCP:服务器名] 开头的工具来自外部 MCP Server，调用时严格按工具的 JSON Schema 传参，并把执行结果如实转述给用户。"
 )
 
 EventSink = Callable[[AgentEvent], None]
@@ -46,9 +49,18 @@ class Agent:
         registry: ToolRegistry | None = None,
         client: OpenAIChatClient | None = None,
         system_prompt: str | None = None,
+        skill_catalog: SkillCatalog | None = None,
     ) -> None:
         self._config = config
-        self._registry = registry or create_default_registry(config.search)
+        self._skills = skill_catalog or SkillCatalog.discover(os.getcwd())
+        if registry is None:
+            self._registry = create_default_registry(config.search, self._skills)
+        else:
+            self._registry = registry
+            for tool in SkillTools(self._skills).tools():
+                if tool.name not in registry:
+                    registry.register(tool)
+        self._mcp = self._setup_mcp()
         self._client = client or OpenAIChatClient(config.llm)
         self._system_prompt = system_prompt or self._build_system_prompt()
         self._history: list[dict] = [{"role": "system", "content": self._system_prompt}]
@@ -66,16 +78,51 @@ class Agent:
         return self._registry
 
     @property
+    def skills(self) -> SkillCatalog:
+        return self._skills
+
+    @property
+    def mcp(self) -> MCPClientManager:
+        return self._mcp
+
+    @property
     def history(self) -> tuple[dict, ...]:
         return tuple(self._history)
 
+    def _setup_mcp(self) -> MCPClientManager:
+        configs, warnings = load_mcp_config(os.getcwd())
+        manager = MCPClientManager(
+            configs,
+            local_tool_names=self._registry.names,
+            warnings=warnings,
+        )
+        if not configs:
+            return manager
+
+        try:
+            manager.start()
+        except BaseException as exc:
+            manager.add_warning(f"MCP 客户端启动失败：{exc}")
+            return manager
+        for tool in manager.tools:
+            if tool.name in self._registry:
+                manager.add_warning(f"MCP 工具名称冲突，已跳过：{tool.name}")
+                continue
+            self._registry.register(tool)
+        return manager
+
     def _build_system_prompt(self) -> str:
-        return f"{SYSTEM_PROMPT}\n当前工作目录：{os.getcwd()}"
+        prompt = f"{SYSTEM_PROMPT}\n当前工作目录：{os.getcwd()}"
+        skill_prompt = self._skills.prompt()
+        if skill_prompt:
+            prompt = f"{prompt}\n\n{skill_prompt}"
+        return prompt
 
     def clear(self) -> None:
         self._history = [{"role": "system", "content": self._system_prompt}]
 
     def close(self) -> None:
+        self._mcp.close()
         self._client.close()
 
     def chat(self, user_input: str, emit: EventSink | None = None) -> None:

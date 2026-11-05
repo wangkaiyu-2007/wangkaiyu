@@ -9,9 +9,8 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
+from textual.theme import Theme
 from textual.widgets import (
-    Footer,
-    Header,
     OptionList,
     ProgressBar,
     RichLog,
@@ -36,6 +35,7 @@ from wAgent.tui.help import HelpScreen
 
 COMMAND_ITEMS = (
     ("/help", "打开使用帮助（F1）"),
+    ("/tools", "查看已注册工具及说明"),
     ("/clear", "清空对话上下文（Ctrl+L）"),
     ("/quit", "退出程序（Ctrl+Q）"),
     ("/exit", "退出程序"),
@@ -43,9 +43,174 @@ COMMAND_ITEMS = (
 COMMAND_NAMES = {name for name, _ in COMMAND_ITEMS}
 
 LABEL_WIDTH = 6
-USER_LABEL = "你" + " " * (LABEL_WIDTH - 2)
-ASSISTANT_LABEL = "助手" + " " * (LABEL_WIDTH - 4)
+USER_LABEL = "› 你" + " " * (LABEL_WIDTH - 4)
+ASSISTANT_LABEL = "◆ 助手"
 CONTINUATION = " " * LABEL_WIDTH
+
+ACCENT = "#e8a87c"
+ACCENT_BRIGHT = "#f5cba7"
+TEXT_COLOR = "#e8e2dc"
+MUTED = "#8a837c"
+BOLD_ACCENT = f"bold {ACCENT}"
+
+LOGO_COLORS = (
+    "#f8dcc0",
+    "#f6d2b0",
+    "#f3c8a1",
+    "#efbd92",
+    "#eab080",
+    "#e5a36e",
+    "#df965d",
+)
+LOGO_GLYPHS = {
+    "W": (
+        "█    █",
+        "█    █",
+        "█    █",
+        "█ ██ █",
+        "█ ██ █",
+        "██  ██",
+        "█    █",
+    ),
+    "A": (
+        " ████ ",
+        "█    █",
+        "█    █",
+        "██████",
+        "█    █",
+        "█    █",
+        "█    █",
+    ),
+    "G": (
+        " █████",
+        "█     ",
+        "█     ",
+        "█  ███",
+        "█    █",
+        "█    █",
+        " █████",
+    ),
+    "E": (
+        "██████",
+        "█     ",
+        "█     ",
+        "█████ ",
+        "█     ",
+        "█     ",
+        "██████",
+    ),
+    "N": (
+        "█    █",
+        "██   █",
+        "███  █",
+        "█ ██ █",
+        "█  ███",
+        "█   ██",
+        "█    █",
+    ),
+    "T": (
+        "██████",
+        "  ██  ",
+        "  ██  ",
+        "  ██  ",
+        "  ██  ",
+        "  ██  ",
+        "  ██  ",
+    ),
+}
+LOGO_SHADOW = "#3b2a1f"
+
+LOGO_LINES = tuple(
+    "  ".join(LOGO_GLYPHS[letter][row] for letter in "WAGENT").rstrip()
+    for row in range(7)
+)
+_LOGO_WIDTH = max(len(line) for line in LOGO_LINES)
+LOGO_GRID = tuple(line.ljust(_LOGO_WIDTH) for line in LOGO_LINES)
+
+TOOL_SUMMARIES = {
+    "getCurrentDirectory": "获取工作目录",
+    "listDirectory": "列出目录",
+    "getFileType": "识别类型",
+    "readTextFile": "读取文本",
+    "createFile": "创建文件",
+    "editFile": "编辑文本",
+    "createDirectory": "创建目录",
+    "deleteDirectory": "删除目录",
+    "deleteFile": "删除文件",
+    "renamePath": "重命名",
+    "fetchWeb": "抓取网页",
+    "searchWeb": "联网搜索",
+    "runCli": "执行命令",
+    "loadSkill": "加载 Skill",
+    "createSkill": "创建 Skill",
+}
+
+WAGENT_THEME = Theme(
+    name="wagent-dark",
+    primary=ACCENT,
+    secondary="#c98f68",
+    accent=ACCENT,
+    foreground=TEXT_COLOR,
+    background="#141414",
+    surface="#1c1c1c",
+    panel="#181818",
+    boost="#262626",
+    warning="#e0b060",
+    error="#e06c75",
+    success="#a3be8c",
+    dark=True,
+)
+
+
+def _compose_logo() -> Text:
+    grid = LOGO_GRID
+    height = len(grid)
+    width = len(grid[0])
+
+    def filled(row: int, col: int) -> bool:
+        return (
+            0 <= row < height
+            and 0 <= col < width
+            and grid[row][col] == "█"
+        )
+
+    lines: list[list[tuple[str, str | None]]] = []
+    for row in range(height + 1):
+        cells: list[tuple[str, str | None]] = []
+        for col in range(width + 1):
+            if filled(row, col):
+                cells.append(("█", LOGO_COLORS[min(row, len(LOGO_COLORS) - 1)]))
+            elif filled(row - 1, col - 1):
+                cells.append(("█", LOGO_SHADOW))
+            else:
+                cells.append((" ", None))
+
+        while cells and cells[-1][0] == " ":
+            cells.pop()
+        lines.append(cells)
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    logo = Text()
+    for row, cells in enumerate(lines):
+        if row:
+            logo.append("\n")
+        run: list[str] = []
+        run_style: str | None = None
+        for char, style in cells:
+            if run and style == run_style:
+                run.append(char)
+                continue
+            if run:
+                logo.append("".join(run), style=run_style)
+            run = [char]
+            run_style = style
+        if run:
+            logo.append("".join(run), style=run_style)
+
+    return logo
+
 
 INLINE_TOKEN = re.compile(
     r"(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\[[^\]\n]+\]\([^)\n]+\))"
@@ -57,6 +222,7 @@ QUOTE = re.compile(r"^\s*>\s?(.*)$")
 RULE = re.compile(r"^\s{0,3}([-*_])(?:\s*\1){2,}\s*$")
 TABLE_SEPARATOR = re.compile(r"^:?-{3,}:?$")
 MAX_TABLE_CELL_WIDTH = 30
+SIDEBAR_BREAKPOINT = 100
 
 
 class PromptArea(TextArea):
@@ -125,21 +291,59 @@ class WAgentApp(App[None]):
         self._usage_completion_tokens = 0
         self._usage_total_tokens = 0
         self._palette_visible = False
+        self._sidebar_auto = True
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
-        with Horizontal(id="body"):
-            yield RichLog(
-                id="log",
-                wrap=True,
-                highlight=False,
-                markup=False,
-                min_width=20,
-                max_lines=None,
-                auto_scroll=True,
-            )
+        with Horizontal(id="topbar"):
+            yield Static(id="brand")
+            yield Static(id="topbar-meta")
+
+        with Horizontal(id="workspace"):
+            with Vertical(id="chat-pane"):
+                with Vertical(id="welcome"):
+                    with Vertical(id="welcome-inner"):
+                        yield Static(id="welcome-logo")
+                        yield Static(id="welcome-subtitle")
+                        yield Static(id="welcome-desc")
+                        with Vertical(id="welcome-card"):
+                            yield Static(id="welcome-info")
+                        yield Static(id="welcome-hint")
+                yield RichLog(
+                    id="log",
+                    wrap=True,
+                    highlight=False,
+                    markup=False,
+                    min_width=20,
+                    max_lines=None,
+                    auto_scroll=True,
+                )
+                with Vertical(id="composer"):
+                    yield Static(id="status")
+                    with Vertical(id="command-palette"):
+                        yield Static(
+                            "命令  Up/Down 选择 · Enter 执行 · Tab 补全 · Esc 关闭",
+                            id="command-palette-title",
+                        )
+                        yield OptionList(id="command-options", markup=False)
+                    yield PromptArea(
+                        placeholder="随便问点什么…  Enter 发送 · Shift+Enter 换行",
+                        id="prompt",
+                        soft_wrap=True,
+                        show_line_numbers=False,
+                        highlight_cursor_line=False,
+                    )
+                    with Horizontal(id="hints"):
+                        yield Static(
+                            "Enter 发送 · Shift+Enter 换行 · / 命令 · F1 帮助",
+                            id="hint-main",
+                        )
+                        yield Static(
+                            "Ctrl+B 侧栏 · Ctrl+L 清空",
+                            id="hint-keys",
+                        )
+
             with VerticalScroll(id="sidebar"):
-                yield Static("wAgent 控制台", id="sidebar-title")
+                yield Static("会话概览", id="sidebar-title")
 
                 with Vertical(id="task-panel", classes="panel"):
                     yield Static("任务进度", classes="panel-title")
@@ -159,65 +363,138 @@ class WAgentApp(App[None]):
                     yield Static("运行环境", classes="panel-title")
                     yield Static(id="runtime-info")
 
+                with Vertical(id="skills-panel", classes="panel"):
+                    yield Static(id="skills-title", classes="panel-title")
+                    yield Static(id="skills-info")
+
                 with Vertical(id="tools-panel", classes="panel"):
                     yield Static(id="tools-title", classes="panel-title")
                     yield Static(id="tools-info")
 
-                yield Static("F1 查看使用帮助", id="sidebar-help")
-
-        yield Static(id="status")
-        with Vertical(id="command-palette"):
-            yield Static(
-                "命令  Up/Down 选择 · Enter 执行 · Tab 补全 · Esc 关闭",
-                id="command-palette-title",
-            )
-            yield OptionList(id="command-options", markup=False)
-        yield PromptArea(
-            placeholder="输入问题，Enter 发送 · Shift+Enter 换行 · 输入 / 查看命令",
-            id="prompt",
-            soft_wrap=True,
-            show_line_numbers=False,
-            highlight_cursor_line=False,
-        )
-        yield Footer()
+                yield Static("Ctrl+B 隐藏侧边栏 · F1 查看帮助", id="sidebar-help")
 
     def on_mount(self) -> None:
+        self.register_theme(WAGENT_THEME)
+        self.theme = WAGENT_THEME.name
+
         self._log = self.query_one("#log", RichLog)
+        self._welcome = self.query_one("#welcome", Vertical)
+        self._welcome_logo = self.query_one("#welcome-logo", Static)
+        self._welcome_subtitle = self.query_one("#welcome-subtitle", Static)
+        self._welcome_desc = self.query_one("#welcome-desc", Static)
+        self._welcome_info = self.query_one("#welcome-info", Static)
+        self._welcome_hint = self.query_one("#welcome-hint", Static)
+        self._brand = self.query_one("#brand", Static)
+        self._topbar_meta = self.query_one("#topbar-meta", Static)
         self._status = self.query_one("#status", Static)
         self._input = self.query_one("#prompt", PromptArea)
         self._task_info = self.query_one("#task-info", Static)
         self._usage_info = self.query_one("#usage-info", Static)
         self._runtime_info = self.query_one("#runtime-info", Static)
+        self._skills_title = self.query_one("#skills-title", Static)
+        self._skills_info = self.query_one("#skills-info", Static)
         self._tools_title = self.query_one("#tools-title", Static)
         self._tools_info = self.query_one("#tools-info", Static)
         self._round_progress = self.query_one("#round-progress", ProgressBar)
         self._palette = self.query_one("#command-palette", Vertical)
         self._command_options = self.query_one("#command-options", OptionList)
+        self._sidebar = self.query_one("#sidebar", VerticalScroll)
         self._palette.display = False
+        if self.size.width < SIDEBAR_BREAKPOINT:
+            self._sidebar.display = False
 
-        self._default_status = f"就绪 | 模型：{self._agent.config.llm.model}"
-        self._status.update(Text(self._default_status))
+        self._default_status = "就绪"
+        self._set_status(self._default_status)
+        self._render_topbar()
         self._render_task()
         self._render_usage()
         self._render_runtime()
+        self._render_skills()
         self._render_tools()
-        self._write_welcome()
+        self._render_welcome()
+        self._log.display = False
+        self._welcome.display = True
         self._input.focus()
         self.set_interval(0.5, self._tick)
 
-    def _write_welcome(self) -> None:
-        self._log.write(Text("wAgent · 本地文件智能助手", style="bold cyan"))
-        self._log.write(
-            Text("可以让我：查看目录、读取或编辑纯文本、创建/删除文件与目录、重命名等。")
+    def _render_topbar(self) -> None:
+        if not hasattr(self, "_brand"):
+            return
+        brand = Text()
+        brand.append("◆ ", style=ACCENT)
+        brand.append("wAgent", style=BOLD_ACCENT)
+        brand.append("  本地 Function Call 智能助手", style=MUTED)
+        self._brand.update(brand)
+
+        meta = Text()
+        meta.append(self._agent.config.llm.model, style=ACCENT)
+        meta.append("  ·  ", style=MUTED)
+        meta.append(os.getcwd(), style=MUTED)
+        self._topbar_meta.update(meta)
+
+    def _set_status(self, message: str, style: str = ACCENT) -> None:
+        if not hasattr(self, "_status"):
+            return
+        text = Text()
+        text.append("● ", style=style)
+        text.append(message)
+        self._status.update(text)
+
+    def _render_welcome(self) -> None:
+        if not hasattr(self, "_welcome_logo"):
+            return
+
+        self._welcome_logo.update(_compose_logo())
+
+        self._welcome_subtitle.update(
+            Text("本地 Function Call 智能助手", style=f"bold {ACCENT_BRIGHT}")
         )
-        self._log.write(
-            Text("相对路径以当前工作目录为准；删除和重命名属于破坏性操作，请明确说明。")
+        self._welcome_desc.update(
+            Text("向模型提问，由模型决定是否调用本地工具", style=MUTED)
         )
-        self._log.write(
-            Text("Enter 发送，Shift+Enter（或 Ctrl+J）换行；输入 / 查看命令，F1 查看帮助。")
-        )
-        self._log.write(Text(""))
-        self._last_kind = "blank"
+
+        names = self._agent.registry.names
+        info = Text()
+        for index, (label, value) in enumerate(
+            (
+                ("模型", self._agent.config.llm.model),
+                ("目录", os.getcwd()),
+                ("工具", f"{len(names)} 个已注册"),
+            )
+        ):
+            if index:
+                info.append("\n")
+            info.append(label, style=MUTED)
+            info.append("    ")
+            info.append(value, style=TEXT_COLOR)
+        self._welcome_info.update(info)
+
+        hint = Text()
+        hint.append("直接输入问题开始", style=TEXT_COLOR)
+        hint.append("   ·   ", style=MUTED)
+        hint.append("/help", style=ACCENT)
+        hint.append(" 查看命令", style=MUTED)
+        hint.append("   ·   ", style=MUTED)
+        hint.append("/tools", style=ACCENT)
+        hint.append(" 查看工具", style=MUTED)
+        self._welcome_hint.update(hint)
+
+    def _show_welcome(self) -> None:
+        if not hasattr(self, "_welcome"):
+            return
+        self._log.display = False
+        self._welcome.display = True
+
+    def _hide_welcome(self) -> None:
+        if not hasattr(self, "_welcome") or not self._welcome.display:
+            return
+        self._welcome.display = False
+        self._log.display = True
+
+    def on_resize(self, event: events.Resize) -> None:
+        if not hasattr(self, "_sidebar") or not self._sidebar_auto:
+            return
+        self._sidebar.display = event.size.width >= SIDEBAR_BREAKPOINT
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         if event.text_area is self._input:
@@ -272,7 +549,7 @@ class WAgentApp(App[None]):
         options = []
         for name, description in matches:
             prompt = Text()
-            prompt.append(name, style="bold cyan")
+            prompt.append(name, style=BOLD_ACCENT)
             prompt.append("  ")
             prompt.append(description)
             options.append(Option(prompt, id=name))
@@ -307,13 +584,30 @@ class WAgentApp(App[None]):
         self._clear_input()
         if command == "/help":
             self.action_help()
+        elif command == "/tools":
+            self._show_tools()
         elif command == "/clear":
             self.action_clear()
             self._input.focus()
         elif command in ("/quit", "/exit"):
             self.exit()
         else:
-            self._status.update(Text(f"未知命令：{command}", style="cyan"))
+            self._set_status(f"未知命令：{command}")
+
+    def _show_tools(self) -> None:
+        self._hide_welcome()
+        self._separate()
+        self._write_line("已注册工具", style=BOLD_ACCENT)
+        for tool in self._agent.registry.tools():
+            line = Text()
+            line.append("• ", style=ACCENT)
+            line.append(tool.name, style=TEXT_COLOR)
+            summary = self._tool_summary(tool)
+            if summary:
+                line.append("  ")
+                line.append(summary, style=MUTED)
+            self._log.write(line)
+        self._last_kind = "notice"
 
     def on_prompt_area_submitted(self, event: PromptArea.Submitted) -> None:
         text = event.value.strip()
@@ -330,7 +624,7 @@ class WAgentApp(App[None]):
             self._clear_input()
             return
         if self._busy:
-            self._status.update(Text("请等待当前回复完成", style="cyan"))
+            self._set_status("请等待当前回复完成")
             return
 
         self._clear_input()
@@ -344,14 +638,14 @@ class WAgentApp(App[None]):
         self.push_screen(HelpScreen())
 
     def action_toggle_sidebar(self) -> None:
-        sidebar = self.query_one("#sidebar", VerticalScroll)
-        sidebar.display = not sidebar.display
-        state = "显示" if sidebar.display else "隐藏"
-        self._status.update(Text(f"侧边栏已{state}"))
+        self._sidebar_auto = False
+        self._sidebar.display = not self._sidebar.display
+        state = "显示" if self._sidebar.display else "隐藏"
+        self._set_status(f"侧边栏已{state}")
 
     def action_clear(self) -> None:
         if self._busy:
-            self._status.update(Text("当前任务进行中，暂时无法清空上下文", style="cyan"))
+            self._set_status("当前任务进行中，暂时无法清空上下文")
             return
         self._hide_command_palette()
         self._agent.clear()
@@ -368,13 +662,14 @@ class WAgentApp(App[None]):
         self._round_progress.update(progress=0)
         self._render_task()
         self._log.clear()
-        self._write_welcome()
-        self._write_line("上下文已清空")
+        self._render_welcome()
+        self._show_welcome()
         self._clear_input()
-        self._status.update(Text(self._default_status))
+        self._set_status(self._default_status)
 
     def _start_turn(self, text: str) -> None:
         self._hide_command_palette()
+        self._hide_welcome()
         self._busy = True
         self._assistant_buffer = ""
         self._assistant_line_started = False
@@ -390,7 +685,7 @@ class WAgentApp(App[None]):
         self._round_progress.update(progress=0)
         self._render_task()
         self._input.disabled = True
-        self._status.update(Text("思考中...", style="cyan"))
+        self._set_status("思考中...")
         self._write_user_message(text)
         self.run_worker(lambda: self._run_agent(text), thread=True, exclusive=True)
 
@@ -445,7 +740,7 @@ class WAgentApp(App[None]):
             self._separate()
             tool_line = Text()
             tool_line.append("[工具] ", style="bold")
-            tool_line.append(event.name, style="bold cyan")
+            tool_line.append(event.name, style=BOLD_ACCENT)
             self._log.write(tool_line)
             self._last_kind = "tool"
             self._write_prefixed("  参数：", event.arguments)
@@ -457,7 +752,7 @@ class WAgentApp(App[None]):
             self._render_task()
             style = "" if event.ok else "bold red"
             self._write_prefixed("  结果：", event.content, style=style)
-            self._status.update(Text("工具执行完成，继续思考...", style="cyan"))
+            self._set_status("工具执行完成，继续思考...")
             return
 
         if isinstance(event, AgentError):
@@ -491,9 +786,10 @@ class WAgentApp(App[None]):
             self._task_state = "已完成"
         self._current_tool = "-"
         self._render_task()
+        self._render_skills()
         self._input.disabled = False
         self._input.focus()
-        self._status.update(Text(self._default_status))
+        self._set_status(self._default_status)
 
     def _tick(self) -> None:
         if self._busy:
@@ -551,18 +847,63 @@ class WAgentApp(App[None]):
             )
         )
 
+    def _render_skills(self) -> None:
+        if not hasattr(self, "_skills_info"):
+            return
+        skills = self._agent.skills.skills
+        self._skills_title.update(f"可用技能（{len(skills)}）")
+        if not skills:
+            self._skills_info.update(
+                Text("当前目录 .agents/skills 下暂无技能", style=MUTED)
+            )
+            return
+
+        text = Text()
+        for index, skill in enumerate(skills):
+            if index:
+                text.append("\n")
+            text.append("• ", style=ACCENT)
+            text.append(skill.name, style=TEXT_COLOR)
+            summary = " ".join((skill.description or "").split())
+            room = 35 - 2 - Text(skill.name).cell_len - 2
+            if summary and room >= 4:
+                summary_text = Text(summary, style=MUTED)
+                summary_text.truncate(room, overflow="ellipsis")
+                text.append("  ")
+                text.append_text(summary_text)
+        self._skills_info.update(text)
+
     def _render_tools(self) -> None:
         if not hasattr(self, "_tools_info"):
             return
-        names = self._agent.registry.names
-        self._tools_title.update(f"可用工具（{len(names)}）")
+        tools = self._agent.registry.tools()
+        self._tools_title.update(f"可用工具（{len(tools)}）")
         text = Text()
-        for index, name in enumerate(names):
+        for index, tool in enumerate(tools):
             if index:
                 text.append("\n")
-            text.append("- ", style="cyan")
-            text.append(name)
+            text.append("• ", style=ACCENT)
+            text.append(tool.name, style=TEXT_COLOR)
+            summary = self._tool_summary(tool)
+            room = 35 - 2 - Text(tool.name).cell_len - 2
+            if summary and room >= 4:
+                summary_text = Text(summary, style=MUTED)
+                summary_text.truncate(room, overflow="ellipsis")
+                text.append("  ")
+                text.append_text(summary_text)
         self._tools_info.update(text)
+
+    @staticmethod
+    def _tool_summary(tool) -> str:
+        summary = TOOL_SUMMARIES.get(tool.name)
+        if summary:
+            return summary
+        text = " ".join((tool.description or "").split())
+        for separator in ("。", "；", ". "):
+            if separator in text:
+                text = text.split(separator, 1)[0]
+                break
+        return text if len(text) <= 10 else f"{text[:9]}…"
 
     @staticmethod
     def _format_lines(lines: list[tuple[str, str]]) -> Text:
@@ -619,7 +960,7 @@ class WAgentApp(App[None]):
                 prefix,
                 CONTINUATION,
                 Text(line),
-                prefix_style="bold",
+                prefix_style=BOLD_ACCENT,
             )
         self._last_kind = "user"
 
@@ -681,7 +1022,7 @@ class WAgentApp(App[None]):
         header = rows[0] if has_header else None
         data_rows = rows[1:] if has_header else rows
         if header is not None:
-            self._write_assistant_raw(self._render_table_row(header, widths, "bold cyan"))
+            self._write_assistant_raw(self._render_table_row(header, widths, BOLD_ACCENT))
             self._write_assistant_raw(self._render_table_separator(widths))
         for row in data_rows:
             self._write_assistant_raw(self._render_table_row(row, widths))
@@ -719,7 +1060,7 @@ class WAgentApp(App[None]):
         else:
             prefix = CONTINUATION
         output = Text()
-        output.append(prefix, style="bold")
+        output.append(prefix, style=BOLD_ACCENT)
         output.append_text(body)
         self._log.write(output)
         self._last_kind = "assistant"
@@ -732,14 +1073,14 @@ class WAgentApp(App[None]):
                 result.append(text[position : match.start()], style=style)
             token = match.group(0)
             if token.startswith("`"):
-                result.append(token[1:-1], style="cyan")
+                result.append(token[1:-1], style=ACCENT)
             elif token.startswith("**"):
-                result.append(token[2:-2], style="bold cyan")
+                result.append(token[2:-2], style=BOLD_ACCENT)
             elif token.startswith("__"):
-                result.append(token[2:-2], style="bold cyan")
+                result.append(token[2:-2], style=BOLD_ACCENT)
             else:
                 label, _, url = token[1:-1].partition("](")
-                result.append(label, style="underline cyan")
+                result.append(label, style=f"underline {ACCENT}")
                 result.append(f"（{url.rstrip(')')}）")
             position = match.end()
         if position < len(text):
@@ -761,7 +1102,7 @@ class WAgentApp(App[None]):
         heading = HEADING.match(stripped)
         if heading:
             body = self._format_inline(heading.group(2))
-            body.stylize("bold cyan")
+            body.stylize(BOLD_ACCENT)
             return body
 
         if RULE.match(stripped):
@@ -770,14 +1111,14 @@ class WAgentApp(App[None]):
         bullet = BULLET.match(stripped)
         if bullet:
             line_text = Text()
-            line_text.append(bullet.group(1) + "• ", style="cyan")
+            line_text.append(bullet.group(1) + "• ", style=ACCENT)
             line_text.append_text(self._format_inline(bullet.group(2)))
             return line_text
 
         ordered = ORDERED.match(stripped)
         if ordered:
             line_text = Text()
-            line_text.append(ordered.group(1) + ordered.group(2) + " ", style="cyan")
+            line_text.append(ordered.group(1) + ordered.group(2) + " ", style=ACCENT)
             line_text.append_text(self._format_inline(ordered.group(3)))
             return line_text
 
@@ -812,7 +1153,7 @@ class WAgentApp(App[None]):
             prefix,
             CONTINUATION,
             body,
-            prefix_style="bold",
+            prefix_style=BOLD_ACCENT,
         )
         self._last_kind = "assistant"
 
