@@ -31,15 +31,20 @@ class OpenAIChatClient:
     def stream_chat(
         self,
         messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
         on_content: Callable[[str], None] | None = None,
+        max_tokens: int | None = None,
     ) -> ChatResult:
-        payload = {
+        payload: dict[str, Any] = {
             "model": self._config.model,
             "messages": messages,
-            "tools": tools,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
+        if tools is not None:
+            payload["tools"] = tools
+        if max_tokens is not None and max_tokens > 0:
+            payload["max_tokens"] = max_tokens
         try:
             response = self._session.post(
                 self._config.chat_url,

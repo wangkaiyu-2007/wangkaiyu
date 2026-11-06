@@ -45,6 +45,37 @@ class UsageUpdated:
     total_tokens: int
 
 
+@dataclass(frozen=True, slots=True)
+class ContextUsageUpdated:
+    used_tokens: int
+    window_tokens: int
+    percent: float
+    is_default_window: bool
+    warning: bool
+    message_count: int
+    estimated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ContextArchived:
+    archive_id: str
+    path: str
+
+
+@dataclass(frozen=True, slots=True)
+class ContextCompacted:
+    archive_id: str
+    original_text: str
+    summary: str
+    note: str
+
+
+@dataclass(frozen=True, slots=True)
+class CompactionFailed:
+    message: str
+    archive_id: str = ""
+
+
 AgentEvent = (
     ContentDelta
     | AssistantCompleted
@@ -53,4 +84,8 @@ AgentEvent = (
     | AgentError
     | RoundStarted
     | UsageUpdated
+    | ContextUsageUpdated
+    | ContextArchived
+    | ContextCompacted
+    | CompactionFailed
 )

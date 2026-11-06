@@ -3,6 +3,10 @@ config.ini
 congfig.ini
 confit.ini
 
+# 上下文归档与会话日志（运行时生成，可能包含对话内容）
+.agents/context/
+.agents/sessions/
+
 # Python
 __pycache__/
 *.py[cod]

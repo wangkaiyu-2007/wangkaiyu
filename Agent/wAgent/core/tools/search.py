@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from ..config import SearchConfig
+from ..config import SearchConfig, ToolConfig
 from .base import Tool
 
 
@@ -19,10 +19,15 @@ class SearchTools:
     def __init__(
         self,
         config: SearchConfig | None = None,
+        tool_config: ToolConfig | None = None,
         session: requests.Session | None = None,
     ) -> None:
         self._config = config
         self._session = session or requests.Session()
+        tool_config = tool_config or ToolConfig()
+        self._max_query_width = tool_config.search_max_query_width
+        self._max_snippet_chars = tool_config.search_max_snippet_chars
+        self._max_result_chars = tool_config.search_max_result_chars
 
     def tools(self) -> tuple[Tool, ...]:
         return (
@@ -37,7 +42,10 @@ class SearchTools:
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "搜索关键词或问题，建议不超过 72 个字符宽度",
+                            "description": (
+                                "搜索关键词或问题，建议不超过 "
+                                f"{self._max_query_width} 个字符宽度"
+                            ),
                         }
                     },
                     "required": ["query"],
@@ -130,8 +138,8 @@ class SearchTools:
                 or reference.get("content")
                 or reference.get("web_anchor")
             )
-            if len(snippet) > MAX_SNIPPET_CHARS:
-                snippet = snippet[:MAX_SNIPPET_CHARS] + "…"
+            if len(snippet) > self._max_snippet_chars:
+                snippet = snippet[: self._max_snippet_chars] + "…"
 
             count += 1
             block = [f"[{count}] {title}", f"URL：{url}"]
@@ -148,12 +156,11 @@ class SearchTools:
             return f"未找到与“{keyword}”相关的有效搜索结果。"
 
         content = "\n".join(lines).strip()
-        if len(content) > MAX_RESULT_CHARS:
-            content = content[:MAX_RESULT_CHARS] + "\n\n[搜索结果过长，已截断]"
+        if len(content) > self._max_result_chars:
+            content = content[: self._max_result_chars] + "\n\n[搜索结果过长，已截断]"
         return content
 
-    @staticmethod
-    def _prepare_query(query: str) -> tuple[str, bool]:
+    def _prepare_query(self, query: str) -> tuple[str, bool]:
         if not isinstance(query, str):
             raise ValueError("搜索关键词必须是字符串")
         text = re.sub(r"\s+", " ", query).strip()
@@ -164,7 +171,7 @@ class SearchTools:
         kept: list[str] = []
         for character in text:
             character_width = 2 if ord(character) > 127 else 1
-            if width + character_width > MAX_QUERY_WIDTH:
+            if width + character_width > self._max_query_width:
                 break
             kept.append(character)
             width += character_width

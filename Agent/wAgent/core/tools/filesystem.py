@@ -7,6 +7,7 @@ import shutil
 import time
 from typing import Any
 
+from ..config import ToolConfig
 from .base import Tool
 
 MAX_TEXT_BYTES = 1024 * 1024
@@ -27,8 +28,8 @@ def ensure_not_drive_root(path: str) -> str:
     return resolved
 
 
-def detect_encoding(raw: bytes) -> str | None:
-    if b"\x00" in raw[:TEXT_SAMPLE_BYTES]:
+def detect_encoding(raw: bytes, sample_bytes: int = TEXT_SAMPLE_BYTES) -> str | None:
+    if b"\x00" in raw[:sample_bytes]:
         return None
     if raw.startswith(b"\xef\xbb\xbf"):
         return "utf-8-sig"
@@ -57,6 +58,11 @@ def format_size(size: int) -> str:
 class FileSystemTools:
     MAX_TEXT_BYTES = MAX_TEXT_BYTES
     TEXT_SAMPLE_BYTES = TEXT_SAMPLE_BYTES
+
+    def __init__(self, config: ToolConfig | None = None) -> None:
+        config = config or ToolConfig()
+        self._max_text_bytes = config.fs_max_text_bytes
+        self._text_sample_bytes = config.fs_text_sample_bytes
 
     def tools(self) -> tuple[Tool, ...]:
         return (
@@ -212,7 +218,7 @@ class FileSystemTools:
         )
 
     def read_text_with_python(self, path: str, max_bytes: int | None = None) -> tuple[str, str]:
-        limit = max_bytes or self.MAX_TEXT_BYTES
+        limit = max_bytes or self._max_text_bytes
         file_path = Path(path)
         if not file_path.exists():
             raise FileNotFoundError(f"文件不存在：{file_path}")
@@ -279,7 +285,7 @@ class FileSystemTools:
         suffix = os.path.splitext(target)[1].lower() or "（无扩展名）"
         mime_type, _ = mimetypes.guess_type(target)
         with open(target, "rb") as handle:
-            sample = handle.read(self.TEXT_SAMPLE_BYTES)
+            sample = handle.read(self._text_sample_bytes)
         kind = "文本文件" if detect_encoding(sample) is not None else "二进制文件"
 
         return (

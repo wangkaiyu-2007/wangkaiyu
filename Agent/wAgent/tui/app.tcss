@@ -16,8 +16,14 @@ Screen {
     content-align: left middle;
 }
 
-#topbar-meta {
+#context-meter {
     width: 1fr;
+    content-align: right middle;
+    padding: 0 2;
+}
+
+#topbar-meta {
+    width: auto;
     content-align: right middle;
     color: $text 55%;
 }
@@ -218,6 +224,7 @@ Screen {
 #task-info,
 #usage-info,
 #runtime-info,
+#mcp-info,
 #skills-info,
 #tools-info {
     height: auto;

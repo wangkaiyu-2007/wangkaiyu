@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from urllib.parse import urlparse
 
+from ..config import ToolConfig
 from .base import Tool
 
 
@@ -19,6 +20,13 @@ USER_AGENT = (
 
 
 class WebTools:
+    def __init__(self, config: ToolConfig | None = None) -> None:
+        config = config or ToolConfig()
+        self._timeout = config.web_timeout
+        self._connect_timeout = config.web_connect_timeout
+        self._max_html_bytes = config.web_max_html_bytes
+        self._max_markdown_chars = config.web_max_markdown_chars
+
     def tools(self) -> tuple[Tool, ...]:
         return (
             Tool(
@@ -84,11 +92,11 @@ class WebTools:
             "--location",
             "--compressed",
             "--max-time",
-            str(DEFAULT_TIMEOUT),
+            f"{self._timeout:g}",
             "--connect-timeout",
-            "10",
+            f"{self._connect_timeout:g}",
             "--max-filesize",
-            str(MAX_HTML_BYTES),
+            str(self._max_html_bytes),
             "--proto",
             "=http,https",
             "--proto-redir",
@@ -106,14 +114,14 @@ class WebTools:
                 command,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
-                timeout=DEFAULT_TIMEOUT + 5,
+                timeout=self._timeout + 5,
                 check=False,
                 shell=False,
             )
         except FileNotFoundError as exc:
             raise ValueError(f"无法启动 curl：{exc}") from exc
         except subprocess.TimeoutExpired as exc:
-            raise ValueError(f"网页访问超时（超过 {DEFAULT_TIMEOUT} 秒）") from exc
+            raise ValueError(f"网页访问超时（超过 {self._timeout:g} 秒）") from exc
         except OSError as exc:
             raise ValueError(f"调用 curl 失败：{exc}") from exc
 
@@ -124,8 +132,10 @@ class WebTools:
         html = completed.stdout
         if not html.strip():
             raise ValueError("网页返回内容为空")
-        if len(html) > MAX_HTML_BYTES:
-            raise ValueError(f"网页内容过大（超过 {MAX_HTML_BYTES // (1024 * 1024)} MB）")
+        if len(html) > self._max_html_bytes:
+            raise ValueError(
+                f"网页内容过大（超过 {self._max_html_bytes / (1024 * 1024):.1f} MB）"
+            )
         return html
 
     @staticmethod
@@ -174,10 +184,10 @@ class WebTools:
             raise ValueError("无法从网页中提取正文，页面可能为空、需要登录或由脚本动态渲染")
 
         content = markdown.strip()
-        if len(content) > MAX_MARKDOWN_CHARS:
+        if len(content) > self._max_markdown_chars:
             content = (
-                content[:MAX_MARKDOWN_CHARS]
-                + f"\n\n[正文过长，已截断，仅保留前 {MAX_MARKDOWN_CHARS} 个字符]"
+                content[: self._max_markdown_chars]
+                + f"\n\n[正文过长，已截断，仅保留前 {self._max_markdown_chars} 个字符]"
             )
         return content
 

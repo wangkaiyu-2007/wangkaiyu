@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 
+from ..config import ToolConfig
 from ..skills import SKILL_FILE_NAME, Skill, SkillCatalog, SkillError
 from .base import Tool
 from .filesystem import detect_encoding
@@ -21,8 +22,13 @@ _FRONTMATTER_SEPARATORS = ("---", "...")
 
 
 class SkillTools:
-    def __init__(self, catalog: SkillCatalog) -> None:
+    def __init__(
+        self, catalog: SkillCatalog, config: ToolConfig | None = None
+    ) -> None:
         self._catalog = catalog
+        config = config or ToolConfig()
+        self._max_file_bytes = config.skill_max_file_bytes
+        self._max_name_length = config.skill_max_name_length
 
     def tools(self) -> tuple[Tool, ...]:
         return (
@@ -86,7 +92,7 @@ class SkillTools:
         )
 
     def create_skill(self, name: str, skillContext: str) -> str:
-        slug = normalize_skill_name(name)
+        slug = normalize_skill_name(name, self._max_name_length)
 
         if not isinstance(skillContext, str) or not skillContext.strip():
             raise SkillError("skillContext 不能为空，请提供要写入 SKILL.md 的完整内容")
@@ -235,12 +241,11 @@ class SkillTools:
         matches.sort(key=lambda item: item.relative_to(skill_dir).as_posix().lower())
         return matches
 
-    @staticmethod
-    def _read_text(path: Path) -> str:
+    def _read_text(self, path: Path) -> str:
         size = path.stat().st_size
-        if size > MAX_SKILL_FILE_BYTES:
+        if size > self._max_file_bytes:
             raise SkillError(
-                f"文件过大（{size} 字节），超过 {MAX_SKILL_FILE_BYTES} 字节限制：{path}"
+                f"文件过大（{size} 字节），超过 {self._max_file_bytes} 字节限制：{path}"
             )
         raw = path.read_bytes()
         encoding = detect_encoding(raw)
@@ -257,7 +262,7 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
-def normalize_skill_name(name: str) -> str:
+def normalize_skill_name(name: str, max_length: int = MAX_SKILL_NAME_LENGTH) -> str:
     if not isinstance(name, str) or not name.strip():
         raise SkillError("Skill 名称不能为空")
     raw = name.strip()
@@ -266,9 +271,9 @@ def normalize_skill_name(name: str) -> str:
         raise SkillError(
             f"Skill 名称必须包含英文字母或数字，并使用小写字母、数字和连字符，例如 pdf-processing：{raw}"
         )
-    if len(slug) > MAX_SKILL_NAME_LENGTH:
+    if len(slug) > max_length:
         raise SkillError(
-            f"Skill 名称过长（{len(slug)} 个字符），最多 {MAX_SKILL_NAME_LENGTH} 个字符：{slug}"
+            f"Skill 名称过长（{len(slug)} 个字符），最多 {max_length} 个字符：{slug}"
         )
     if not SKILL_NAME_PATTERN.match(slug):
         raise SkillError(f"Skill 名称格式无效，只能使用小写字母、数字和连字符：{slug}")

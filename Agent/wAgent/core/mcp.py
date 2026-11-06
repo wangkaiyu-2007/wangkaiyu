@@ -115,12 +115,16 @@ def _positive_float(value: Any, default: float) -> float:
     return number if number > 0 else default
 
 
-def _parse_server(name: str, entry: Any) -> MCPServerConfig:
+def _parse_server(
+    name: str,
+    entry: Any,
+    default_call_timeout: float = DEFAULT_CALL_TIMEOUT,
+) -> MCPServerConfig:
     if not isinstance(entry, Mapping):
         raise MCPConfigError(f"MCP Server「{name}」的配置必须是 JSON 对象")
 
     transport = _normalize_transport(entry, name)
-    timeout = _positive_float(entry.get("timeout"), DEFAULT_CALL_TIMEOUT)
+    timeout = _positive_float(entry.get("timeout"), default_call_timeout)
 
     if transport == "stdio":
         command = entry.get("command")
@@ -155,6 +159,7 @@ def _parse_server(name: str, entry: Any) -> MCPServerConfig:
 
 def load_mcp_config(
     project_root: str | Path | None = None,
+    default_call_timeout: float = DEFAULT_CALL_TIMEOUT,
 ) -> tuple[list[MCPServerConfig], list[str]]:
     """读取项目目录（默认当前工作目录）下的 .mcp.json。"""
 
@@ -194,7 +199,9 @@ def load_mcp_config(
         if isinstance(entry, Mapping) and entry.get("disabled") is True:
             continue
         try:
-            configs.append(_parse_server(server_name, entry))
+            configs.append(
+                _parse_server(server_name, entry, default_call_timeout)
+            )
         except MCPConfigError as exc:
             warnings.append(str(exc))
     return configs, warnings
@@ -321,10 +328,12 @@ class MCPClientManager:
         *,
         local_tool_names: Iterable[str] = (),
         warnings: Iterable[str] = (),
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
     ) -> None:
         self._configs = tuple(configs)
         self._local_tool_names = set(local_tool_names)
         self._warnings: list[str] = list(warnings)
+        self._connect_timeout = connect_timeout
         self._connections: dict[str, _Connection] = {}
         self._tools: list[MCPTool] = []
         self._tool_map: dict[str, tuple[str, str]] = {}
@@ -381,7 +390,7 @@ class MCPClientManager:
         )
         self._thread.start()
         wait_seconds = 15.0 + sum(
-            min(max(config.timeout, 1.0), DEFAULT_CONNECT_TIMEOUT)
+            min(max(config.timeout, 1.0), self._connect_timeout)
             for config in self._configs
         )
         if not self._ready_event.wait(wait_seconds):
@@ -616,7 +625,7 @@ class MCPClientManager:
                 legacy_client(
                     config.url or "",
                     headers=dict(config.headers) if config.headers else None,
-                    timeout=min(config.timeout, DEFAULT_CONNECT_TIMEOUT),
+                    timeout=min(config.timeout, self._connect_timeout),
                     sse_read_timeout=config.timeout,
                 )
             )
@@ -646,7 +655,7 @@ class MCPClientManager:
             sse_client(
                 config.url or "",
                 headers=dict(config.headers) if config.headers else None,
-                timeout=min(config.timeout, DEFAULT_CONNECT_TIMEOUT),
+                timeout=min(config.timeout, self._connect_timeout),
                 sse_read_timeout=config.timeout,
             )
         )

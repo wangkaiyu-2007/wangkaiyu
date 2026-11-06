@@ -60,8 +60,10 @@ Agent/wAgent/
 ├── config.example.ini
 ├── .mcp.json               # MCP Server 连接配置（运行时读取当前工作目录）
 ├── core/
-│   ├── agent.py             # Agent：多轮对话 + 工具调用循环
+│   ├── agent.py             # Agent：多轮对话 + 工具调用循环 + 上下文压缩
 │   ├── config.py            # 配置加载、校验、查找顺序
+│   ├── context.py           # 上下文归档、Token 估算、压缩 Prompt
+│   ├── sessions.py          # 会话事件日志、保存、列表与恢复
 │   ├── events.py            # ContentDelta / ToolStarted 等事件
 │   ├── llm.py               # OpenAI 兼容流式客户端
 │   ├── skills.py            # Skill 发现、Frontmatter 解析与系统提示生成
@@ -72,11 +74,15 @@ Agent/wAgent/
 │       ├── filesystem.py    # 文件系统工具实现
 │       ├── web.py           # fetchWeb：curl + trafilatura 网页正文提取
 │       ├── search.py        # searchWeb：百度千帆网络搜索
+│       ├── context.py       # recallContext：检索历史归档
 │       ├── skills.py        # loadSkill：按需加载 Skill 说明与附件
 │       ├── registry.py      # 工具注册与 JSON 参数分发
 │       └── __init__.py      # 默认工具集装配
 └── tui/
     ├── app.py               # Textual 应用、侧边栏与事件渲染
+    ├── compact.py           # 压缩前后上下文对照面板
+    ├── sessions.py          # 历史会话列表面板
+    ├── setup.py             # 首次运行配置提示对话框
     ├── help.py              # F1 / /help 使用帮助弹窗
     ├── app.tcss             # 界面样式
     └── __init__.py
@@ -119,16 +125,40 @@ model = deepseek-chat
 [agent]
 max_tool_rounds = 10
 request_timeout = 60
+# 可选：模型上下文窗口；不填时按 128k 显示并标注「默认」
+# context_window = 128k
+# 可选：压缩摘要请求的最大输出 tokens
+# compact_max_tokens = 8192
+# 可选：上下文警告比例、压缩摘要目标 tokens、AGENTS.md 文件名
+# context_warning_ratio = 0.6
+# compact_summary_tokens = 5000
+# agents_md_file = AGENTS.md
+
+[session]
+directory = .agents/sessions
+auto_save_on_quit = true
+
+[ui]
+refresh_interval = 0.5
+sidebar_breakpoint = 100
+
+[tools]
+cli_timeout = 30
+web_timeout = 20
+mcp_connect_timeout = 30
+mcp_call_timeout = 60
 ```
+
+当前目录没有 `config.ini` 时，程序会自动创建一份包含 mock 占位值的完整配置，并弹出提示对话框；修改 `base_url`、`api_key`、`model` 后重新启动。
 
 配置查找顺序：
 
 1. `--config` 指定路径
 2. 环境变量 `WAGENT_CONFIG`
-3. `wAgent/config.ini`
-4. `wAgent/congfig.ini`（兼容指定文件名）
-5. `Agent/Practice02/config.ini`（兼容旧配置）
-6. 当前工作目录下的 `config.ini`
+3. 当前工作目录下的 `config.ini`
+4. `wAgent/config.ini`
+5. `wAgent/congfig.ini`（兼容指定文件名）
+6. `Agent/Practice02/config.ini`（兼容旧配置）
 
 搜索配置示例：
 
@@ -143,7 +173,7 @@ timeout = 20
 
 ## MCP Client
 
-wAgent 启动时会读取当前工作目录（也就是运行 wAgent 的项目目录）下的 `.mcp.json`，连接其中配置的 MCP Server，并调用 `list_tools()` 自动发现工具。也可以通过环境变量 `WAGENT_MCP_CONFIG` 指定其他配置文件路径。
+wAgent 会读取当前工作目录（也就是运行 wAgent 的项目目录）下的 `.mcp.json`。TUI 先完成启动，再在后台线程异步连接 MCP Server 并调用 `list_tools()` 自动发现工具；连接完成后右侧边栏的 MCP 区域和工具列表会自动刷新。也可以通过环境变量 `WAGENT_MCP_CONFIG` 指定其他配置文件路径。
 
 ```json
 {
@@ -182,12 +212,19 @@ wAgent 启动时会读取当前工作目录（也就是运行 wAgent 的项目�
 | `Enter`（命令列表打开时） | 执行当前选中的命令 |
 | `Esc` | 关闭命令列表 |
 | `/help`、`F1` | 打开使用帮助 |
+| `/new`、`Ctrl+N` | 新建会话，并自动保存当前会话 |
+| `/resume`、`/sessions` | 打开历史会话面板，`Up/Down` 选择、`Enter` 恢复、`Esc` 取消 |
+| `/save` | 保存当前会话到 `.agents/sessions/` |
+| `/status` | 查看会话、上下文和 MCP 状态 |
+| `/mcp` | 查看 MCP 服务器及其工具 |
 | `/tools` | 在对话区查看全部已注册工具及简短说明 |
+| `/skills` | 在对话区查看已发现的 Agent Skills |
+| `/compact` | 归档原始上下文并生成压缩摘要 |
 | `/clear` | 清空对话上下文和界面记录 |
-| `/quit`、`/exit` | 退出程序 |
+| `/quit`、`/exit` | 保存当前会话并退出 |
 | `Ctrl+B` | 显示或隐藏侧边栏 |
 | `Ctrl+L` | 清空上下文 |
-| `Ctrl+Q` | 退出程序 |
+| `Ctrl+Q` | 保存并退出 |
 
 界面会实时展示：
 
@@ -204,7 +241,24 @@ wAgent 启动时会读取当前工作目录（也就是运行 wAgent 的项目�
 - **欢迎页**：首次启动时主区域居中展示带轻微右下投影的像素风 WAGENT 标识，以及副标题、模型/目录/工具信息卡片和快捷提示；发送消息后切换为对话区，清空上下文后重新显示。
 - **对话区**：占据主区域，不使用厚重边框，让消息和代码块获得更多横向空间。
 - **底部输入区**：状态行、命令列表、多行输入框和快捷键提示集中排列，输入框获得焦点时高亮边框。
-- **右侧边栏**：保留任务、用量、环境和工具四个说明区域，使用轻量分隔线代替多层卡片边框；终端宽度小于 100 列时默认隐藏，可用 `Ctrl+B` 打开。
+- **右侧边栏**：展示任务、用量、环境、MCP 服务器、技能和工具；MCP 区域在界面启动后异步加载并动态刷新，显示已连接服务器及每个服务器的工具。终端宽度小于配置阈值（默认 100 列）时隐藏，可用 `Ctrl+B` 打开。
+
+### 会话管理与 AGENTS.md
+
+- **会话日志**：当前会话以 JSONL 事件日志保存在 `.agents/sessions/`，记录会话头、消息追加、标题、快照和保存检查点。
+- **自动保存**：`/new` 会先保存当前会话再创建新会话；`/quit` 默认自动保存；每轮对话结束后也会同步写入新消息。
+- **恢复会话**：`/resume` 打开历史会话面板，展示编号、标题、更新时间和消息数，选中后用历史消息替换当前上下文。
+- **AGENTS.md**：会话首次加载时若当前目录存在 `AGENTS.md`，会作为一条带标记的消息追加到聊天历史，并随会话日志持久化；后续轮次直接复用，不会重复注入。
+- **首次配置**：当前目录缺少 `config.ini` 时，程序会自动生成一份完整 mock 配置并弹出提示对话框；修改 `base_url`、`api_key`、`model` 后重新启动。
+
+### 上下文压缩与历史检索
+
+- **用量监控**：顶部栏醒目显示「当前上下文 k / 模型窗口 k / 占用百分比」。模型窗口可通过 `[agent] context_window` 配置；未配置时按 128k 计算并标注「默认」。
+- **60% 警告**：每次模型响应后检查上下文用量，达到模型窗口的 60% 时写入警告并暂停接受普通提示词，直到执行 `/compact`。
+- **原始归档**：压缩前先把完整消息（角色、内容、工具调用参数、工具结果、顺序）写入当前目录 `.agents/context/<编号>.jsonl`；归档失败则终止压缩。
+- **摘要生成**：归档成功后调用专门的压缩 Prompt，请求模型输出约 5,000 Tokens 的 Markdown 工作摘要。
+- **结果替换**：摘要成功后保留 System Prompt 与工具定义，用摘要替换历史消息，并在末尾追加归档编号说明；同时弹出左右两栏的压缩前后对照面板。
+- **历史检索**：`recallContext` 工具支持按 `text` 关键词检索全部归档，或用 `id` 限定归档编号，返回匹配片段、归档编号和消息位置。
 
 ### 视觉风格
 

@@ -4,6 +4,7 @@ import locale
 import shutil
 import subprocess
 
+from ..config import ToolConfig
 from .base import Tool
 
 
@@ -12,6 +13,11 @@ MAX_OUTPUT_CHARS = 8000
 
 
 class CliTools:
+    def __init__(self, config: ToolConfig | None = None) -> None:
+        config = config or ToolConfig()
+        self._timeout = config.cli_timeout
+        self._max_output_chars = config.cli_max_output_chars
+
     def tools(self) -> tuple[Tool, ...]:
         return (
             Tool(
@@ -61,7 +67,7 @@ class CliTools:
                 argv,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=self._timeout,
                 check=False,
                 shell=False,
             )
@@ -100,15 +106,14 @@ class CliTools:
                 continue
         return data.decode("utf-8", errors="replace")
 
-    @staticmethod
-    def _truncate(text: str) -> str:
+    def _truncate(self, text: str) -> str:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
-        if len(text) <= MAX_OUTPUT_CHARS:
+        if len(text) <= self._max_output_chars:
             return text
-        omitted = len(text) - MAX_OUTPUT_CHARS
+        omitted = len(text) - self._max_output_chars
         return (
-            text[:MAX_OUTPUT_CHARS]
-            + f"\n[输出过长，已截断：仅保留前 {MAX_OUTPUT_CHARS} 个字符，"
+            text[: self._max_output_chars]
+            + f"\n[输出过长，已截断：仅保留前 {self._max_output_chars} 个字符，"
             f"其余 {omitted} 个字符已省略]"
         )
 
@@ -123,7 +128,7 @@ class CliTools:
         stdout = self._truncate(stdout).strip()
         stderr = self._truncate(stderr).strip()
         if timed_out:
-            status = f"超时（超过 {DEFAULT_TIMEOUT} 秒，进程已终止）"
+            status = f"超时（超过 {self._timeout:g} 秒，进程已终止）"
             exit_text = "无（超时终止）"
         else:
             status = "完成"
